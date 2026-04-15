@@ -71,7 +71,7 @@ func NominalRBMK() *Reactor {
 	return &Reactor {
 		Neutronics:      Neutronics{
 			PowerMW:    1600,
-			KEffective: 1.000,
+			KEffective: 1.005,
 		},
 		ControlRod:      ControlRod{
 			RodsInserted: 15,
@@ -83,7 +83,7 @@ func NominalRBMK() *Reactor {
 			Pressure:     65,
 		},
 		Temperature:     Temperature{
-			CoreTempC:    285,
+			CoreTempC:    285
 			FuelRodTempC: 620,
 		},
 		XenonPoisoning:  XenonPoisoning{
