@@ -35,35 +35,74 @@ Chernobyl Nuclear Power Plant — Unit 4
 ```
 
 ---
-
 ### Slice 2 — k-eff Drives Power
 
 **Goal**: Each tick, k-eff calculates a new power level. Power grows when k-eff > 1,
 falls when k-eff < 1. The reactor is now alive.
 
 **Files touched**:
-- `physics/neutronics.go` — k-eff to power calculation, point kinetics model
+- `physics/neutronics.go` — k-eff to power calculation, two-regime point kinetics model
 - `sim/engine.go` — call neutronics each tick before printing
 
 **Physics introduced**:
-- Point kinetics equation — power changes proportionally to (k-eff - 1) / delayed neutron lifetime
-- Power clamped to 0 at minimum, uncapped at maximum
-- Status updates: WARNING when power > 2000 MW or k-eff > 1.05
+
+Two-regime point kinetics model based on the relationship between k-eff and the
+prompt criticality threshold (1 + β = 1.0065):
+
+Regime 1 — Subcritical Prompt (k-eff < 1 + β):
+- Delayed neutrons dominate — reactor is slow and controllable
+- Effective lifetime: λ_eff = β * τ_d where τ_d = 13s (mean delayed neutron lifetime)
+- α = (k-eff - 1) / λ_eff
+- Power changes gradually — observable at human timescales
+
+Regime 2 — Supercritical Prompt (k-eff >= 1 + β):
+- Prompt neutrons alone sustain the reaction — extremely fast
+- α = (k-eff - 1 - β) / λ where λ = 0.0001s (prompt neutron lifetime)
+- Power surges instantly — meltdown within the same tick
+- This is the Chernobyl moment
+
+Exact solution for both regimes:
+- P(t + dt) = P(t) * e^(α * dt)
+- Power clamped to 0 at minimum
+- Status: WARNING when power >= 3200 MW or k-eff > 1.0
 
 **Done when**:
-- Modifying k-eff directly in code causes visible power change each tick
-- Stable k-eff = 1.000 holds power steady
-- k-eff = 1.010 causes slow power rise
+- k-eff = 1.000 holds power steady at 1600 MW
 - k-eff = 0.990 causes slow power fall
+- k-eff = 1.005 causes slow, visible power rise (subcritical prompt)
+- k-eff = 1.010 causes immediate meltdown (supercritical prompt — above 1 + β)
+- Status correctly shows WARNING when power exceeds nominal or k-eff exceeds 1.0
 
 **Expected output**:
+
+Subcritical prompt (k-eff = 1.005):
 ```
 [t=   1s]  Power:  1600.0 MW  k-eff: 1.000  Core: 285°C  Rods: 15/211  Status: STABLE
-[t=   2s]  Power:  1616.0 MW  k-eff: 1.010  Core: 285°C  Rods: 15/211  Status: STABLE
-[t=   3s]  Power:  1632.2 MW  k-eff: 1.010  Core: 286°C  Rods: 15/211  Status: STABLE
-[t=   4s]  Power:  1923.0 MW  k-eff: 1.010  Core: 290°C  Rods: 15/211  Status: WARNING
+[t=   2s]  Power:  1697.3 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   3s]  Power:  1800.6 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   4s]  Power:  1910.3 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   5s]  Power:  2027.0 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   6s]  Power:  2151.3 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   7s]  Power:  2283.7 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   8s]  Power:  2424.8 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=   9s]  Power:  2575.3 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=  10s]  Power:  2736.0 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=  11s]  Power:  2907.5 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=  12s]  Power:  3090.8 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=  13s]  Power:  3286.8 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: STABLE
+[t=  14s]  Power:  3496.5 MW  k-eff: 1.005  Core: 285°C  Rods: 15/211  Status: WARNING
 ```
 
+Supercritical prompt (k-eff = 1.010 — above 1 + β = 1.0065):
+```
+[t=   1s]  Power: 32000.0 MW  k-eff: 1.010  Core: 285°C  Rods: 15/211  Status: MELTDOWN
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ REACTOR DESTROYED
+ 1986-04-26  01:23:44
+ PROMPT CRITICALITY EXCEEDED
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ```
 ---
 
 ### Slice 3 — Control Rods Change k-eff
