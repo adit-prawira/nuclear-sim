@@ -180,7 +180,7 @@ nuclear-sim/
 
 ## Definition of Done — Phase 1
 
-- [ ] Slice 1: reactor prints static state to console
+- [x] Slice 1: reactor prints static state to console
 - [ ] Slice 2: power responds to k-eff each tick
 - [ ] Slice 3: player can insert and withdraw rods, power responds
 - [ ] Slice 4: reactor can reach meltdown and halt
