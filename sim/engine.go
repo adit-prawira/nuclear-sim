@@ -2,55 +2,71 @@ package engine
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/adit-prawira/nuclear-sim/physics"
 	"github.com/adit-prawira/nuclear-sim/reactor"
+	"golang.org/x/term"
 )
 
 type Engine interface {
-	Run()
-	SimTime() float64
+	Run()	
 }
 
 type RBMKEngine struct {
-	reactor            *reactor.Reactor
+	reactor            reactor.Reactor
 	tickInterval       time.Duration
 	simulationTickSize float64
 	neutronics         physics.NeutronicsEngine
 	stopChan           chan struct{}
+	inputChan 				 chan byte 
+	graphiteSpikeActive bool 
 }
 
-func NewRBMKEnginer(r *reactor.Reactor) Engine {
+func NewRBMKEnginer(r reactor.Reactor) Engine {
 	return &RBMKEngine{
 		reactor:            r,
 		tickInterval:       100 * time.Millisecond,
 		neutronics:         physics.NewRBMKNeutronicsEngine(),
 		simulationTickSize: 1.0,
 		stopChan:           make(chan struct{}),
+		inputChan: 					make(chan byte, 10),
+		graphiteSpikeActive: false,
 	}
 }
 
 // Run implements Engine.
 func (re *RBMKEngine) Run() {
 	ticker := time.NewTicker(re.tickInterval)
+	// set terminal raw mode 
+	currentState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Printf("ERROR: Unable to set terminal to raw mode: %v\n", err)
+		return
+	}
+	defer term.Restore(int(os.Stdin.Fd()), currentState)
+
+	// Listen for keyboard input 
+	go re.listenForInput()
 
 	// call stop when Run() finish running which is triggered when reactor is destroyed
 	defer re.stop() 
 
+	re.printControls()
+
 	for range ticker.C {
+		// Process keyboard input 
+		re.processInput()
+
 		// Stop when reactor is destroyed due to meltdown
-		if re.reactor.SimulationState.Destroyed {
+		if re.reactor.IsDestroyed() {
 			re.printMeltdown()
 			return
 		}
 		re.tick()
 		re.print()
 	}
-}
-
-func (re *RBMKEngine) SimTime() float64 {
-	return re.reactor.SimulationState.SimulationTimeSeconds
 }
 
 func (re *RBMKEngine) stop() {
@@ -60,61 +76,65 @@ func (re *RBMKEngine) stop() {
 // Tick implements Engine.
 func (re *RBMKEngine) tick() {
 	dt := re.simulationTickSize
-	currentPower := re.reactor.Neutronics.PowerMW
-	keff := re.reactor.Neutronics.KEffective
+	
+	baseKeff := 1.000  
+	rodReactivity := re.reactor.RodReactivity()
+	graphiteSpike := 0.0 
+	
+	if re.graphiteSpikeActive {
+		graphiteSpike = reactor.GraphiteTipSpike // +0.0003
+		re.graphiteSpikeActive = false
+	}
 
-	re.reactor.SimulationState.SimulationTimeSeconds += dt	
-	re.reactor.Neutronics.PowerMW = re.neutronics.UpdatePower(currentPower, keff, dt)
+	re.reactor.SetKEffective(baseKeff + rodReactivity + graphiteSpike)
+
+	currentPower := re.reactor.ThermalPower()
+	keff := re.reactor.KEffective()
+
+	re.reactor.UpdateSimulationTimeSeconds(dt)
+	re.reactor.SetThermalPower(re.neutronics.UpdatePower(currentPower, keff, dt))	
 	re.updateStatus()
 }
 
 func (re *RBMKEngine) print() {
 	reactor := re.reactor
-	fmt.Printf("[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Rods: %d/211  Status: %s\n", 
-		reactor.SimulationState.SimulationTimeSeconds,
-		reactor.Neutronics.PowerMW,
-		reactor.Neutronics.KEffective,
-		reactor.Temperature.CoreTempC,
-		reactor.ControlRod.RodsInserted,
-		reactor.SimulationState.Status.String(),
+	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Rods: %d/211  Status: %s\r\n", 
+		reactor.SimulationTimeSeconds(),
+		reactor.ThermalPower(),
+		reactor.KEffective(),
+		reactor.CoreTemperatureC(),
+		reactor.TotalInsertedRods(),
+		reactor.Status().String(),
 	)
 }
 
-func (re *RBMKEngine) updateStatus() {
-	// Nominal RBMK power is 3200 MW 
-	// Historical estimates put the peak power during the explosion at ~30,000 MW  to  ~33,000 MW
-	// Therefore, approximately 3200 * 10 ~= 32,000 MW 
-	// Use 32,000 MW as meltdown threshold
+func (re *RBMKEngine) updateStatus() {	
 	switch {
-	case re.reactor.Neutronics.PowerMW >= 32000:
-		re.reactor.SimulationState.Status = reactor.StatusMeltdown
-		re.reactor.SimulationState.Destroyed = true
-
-	// Since 3200 is the max of RBMK nominal thermal power 
-	// start warning when goes beyong 
-	// or if keff > 1.0 start warning because reaction is growing (supercritical)
-	case re.reactor.Neutronics.PowerMW >= 3200 || re.reactor.Neutronics.KEffective > 1.0:
-		re.reactor.SimulationState.Status = reactor.StatusWarning
+	case re.reactor.IsMeltdown():
+		re.reactor.SetStatus(reactor.StatusMeltdown)
+		re.reactor.SetIsDestroyed(true)		
+	case re.reactor.IsSupercritical():
+		re.reactor.SetStatus(reactor.StatusWarning) 
 	default:
-		re.reactor.SimulationState.Status = reactor.StatusStable
+		re.reactor.SetStatus(reactor.StatusStable) 
 	}
 }
 
 func (re *RBMKEngine) printMeltdown() {
-	fmt.Printf("\n")
-	fmt.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-	fmt.Printf("   REACTOR DESTROYED\n")
-	fmt.Printf("   1986-04-26  %s\n", re.simTimeAsClockString())
-	fmt.Printf("   PROMPT CRITICALITY EXCEEDED\n")
-	fmt.Printf("   Peak power: %.0f MW  (%.0f%% of nominal)\n",
-					re.reactor.Neutronics.PowerMW,
-					(re.reactor.Neutronics.PowerMW/3200)*100,
+	fmt.Printf("\r\n")
+	fmt.Printf("\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n")
+	fmt.Printf("   REACTOR DESTROYED\r\n")
+	fmt.Printf("   1986-04-26  %s\r\n", re.simTimeAsClockString())
+	fmt.Printf("   PROMPT CRITICALITY EXCEEDED\r\n")
+	fmt.Printf("   Peak power: %.0f MW  (%.0f%% of nominal)\r\n",
+					re.reactor.ThermalPower(),
+					re.reactor.PowerPecentOfNominal(),
 	)
-	fmt.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+	fmt.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n")
 }
 
 func (re *RBMKEngine) simTimeAsClockString() string {
-	totalSeconds := int(re.reactor.SimulationState.SimulationTimeSeconds)
+	totalSeconds := int(re.reactor.SimulationTimeSeconds())
 	baseHour := 1
 	baseMinute := 22
 	baseSecond := 30
@@ -123,6 +143,78 @@ func (re *RBMKEngine) simTimeAsClockString() string {
 	h := (totalSeconds / 3600) % 24
 	m := (totalSeconds % 3600) / 60
 	s := totalSeconds % 60
-
 	return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
+}
+
+func (re *RBMKEngine) printControls() {
+	fmt.Println("\r\nControls:\r")
+	fmt.Println("		i - Insert 1 control rod\r")
+	fmt.Println("		I - Insert 10 control rods\r")
+	fmt.Println("		o - Withdraw 1 control rod\r")
+	fmt.Println("		O - Withdraw 10 control rods\r")
+	fmt.Println("		q - Quit\r\n\r")
+	fmt.Println()
+}
+
+func (re *RBMKEngine) listenForInput() {
+	buf := make([]byte, 1)
+	for {
+		select {
+		case <- re.stopChan:
+			return
+		default:
+			n, err := os.Stdin.Read(buf)
+			
+			// Continue to stream for input
+			if err != nil || n == 0 {
+				continue
+			} 
+
+			// Otherwise set input
+			re.inputChan <- buf[0] 
+		}
+	}
+}
+
+func (re * RBMKEngine	) processInput() {
+	for {
+		select {
+		case input := <- re.inputChan: 
+			switch input {
+			case 'i': 
+				inserted, isGraphiteTipSpike := re.reactor.InsertRods(1)
+				re.logControlRodsInsertion(inserted, isGraphiteTipSpike)
+			case 'I': 
+				inserted, isGraphiteTipSpike := re.reactor.InsertRods(10)
+				re.logControlRodsInsertion(inserted, isGraphiteTipSpike)
+			case 'o': 
+				withdrawn, isBelowSafe := re.reactor.WithdrawnRods(1)
+				re.logControlRodsWithdrawal(withdrawn, isBelowSafe)
+			case 'O': 
+				withdrawn, isBelowSafe := re.reactor.WithdrawnRods(10)
+				re.logControlRodsWithdrawal(withdrawn, isBelowSafe)
+			case 'q', 'Q': 
+        fmt.Println("\n> System Shutdown Requested")			  
+				re.reactor.SetIsDestroyed(true)
+			}	
+		default: 
+			return
+		}
+	}
+}
+
+func (re *RBMKEngine) logControlRodsInsertion(inserted int, isGraphiteTipSpike bool) {
+	if isGraphiteTipSpike {
+		re.graphiteSpikeActive = true 
+		fmt.Printf("> Inserted %d control rod (GRAPHITE TIP SPIKE!)\n", inserted)
+	}else {
+		fmt.Printf("> Inserted %d conrol rod\n", inserted)
+	}
+}
+
+func (re *RBMKEngine) logControlRodsWithdrawal(withdrawn int, isBelowSafe bool) {
+	fmt.Printf("> Withdrew %d control rod\n", withdrawn)
+	if isBelowSafe{
+		fmt.Printf("WARNING: %d control rod(s) inserted - below safe minium of %d control rods", re.reactor.TotalInsertedRods(), reactor.MinimumSafeRods)
+	}
 }
