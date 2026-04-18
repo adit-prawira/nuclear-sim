@@ -194,7 +194,7 @@ func (re * RBMKEngine	) processInput() {
 				withdrawn, isBelowSafe := re.reactor.WithdrawnRods(10)
 				re.logControlRodsWithdrawal(withdrawn, isBelowSafe)
 			case 'q', 'Q': 
-        fmt.Println("\n> System Shutdown Requested")			  
+        fmt.Println("\r\n> System Shutdown Requested")			  
 				re.reactor.SetIsDestroyed(true)
 			}	
 		default: 
@@ -206,15 +206,15 @@ func (re * RBMKEngine	) processInput() {
 func (re *RBMKEngine) logControlRodsInsertion(inserted int, isGraphiteTipSpike bool) {
 	if isGraphiteTipSpike {
 		re.graphiteSpikeActive = true 
-		fmt.Printf("> Inserted %d control rod (GRAPHITE TIP SPIKE!)\n", inserted)
+		fmt.Printf("\r> Inserted %d control rod (GRAPHITE TIP SPIKE!)\r\n", inserted)
 	}else {
-		fmt.Printf("> Inserted %d conrol rod\n", inserted)
+		fmt.Printf("\r> Inserted %d conrol rod\r\n", inserted)
 	}
 }
 
 func (re *RBMKEngine) logControlRodsWithdrawal(withdrawn int, isBelowSafe bool) {
-	fmt.Printf("> Withdrew %d control rod\n", withdrawn)
+	fmt.Printf("\r> Withdrew %d control rod\r\n", withdrawn)
 	if isBelowSafe{
-		fmt.Printf("WARNING: %d control rod(s) inserted - below safe minium of %d control rods", re.reactor.TotalInsertedRods(), reactor.MinimumSafeRods)
+		fmt.Printf("\rWARNING: %d control rod(s) inserted - below safe minium of %d control rods\r\n", re.reactor.TotalInsertedRods(), reactor.MinimumSafeRods)
 	}
 }

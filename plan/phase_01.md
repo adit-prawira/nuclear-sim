@@ -222,7 +222,7 @@ nuclear-sim/
 - [x] Slice 1: reactor prints static state to console
 - [x] Slice 2: power responds to k-eff each tick
 - [x] Slice 3: player can insert and withdraw rods, power responds
-- [ ] Slice 4: reactor can reach meltdown and halt
+- [x] Slice 4: reactor can reach meltdown and halt
 
 When all four are complete, we proceed to Phase 2 — coolant, xenon, and
 thermal feedback.
