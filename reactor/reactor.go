@@ -76,7 +76,8 @@ type Reactor interface {
 	SetKEffective(keff float64)
 
 	CoreTemperatureC() float64 
-	
+	SetCoreTemperatureC(temperature float64)
+
 	Status() ReactorStatus
 	SetStatus(status ReactorStatus)
 
@@ -88,6 +89,20 @@ type Reactor interface {
 	InsertRods(count int) (inserted int, isGraphiteTipSpike bool)
 	WithdrawnRods(count int) (withdrawn int, isBelowSafe bool)
 	RodReactivity() float64
+
+	// Coolant 
+	UpdateCoolantFlowRate(delta float64) float64
+	VoidReactivity() float64 
+	FlowRate() float64 
+	
+	VoidFraction() float64
+	VoidFractionPercent() float64 
+	SetVoidFraction(fraction float64)
+
+	CoolantTemperatureC() float64 
+	SetCoolantTemperatureC(temperature float64) 
+
+	CoolantPressure() float64
 }
 
 type reactor struct {
@@ -113,7 +128,7 @@ func NominalRBMK() Reactor {
 		coolant:         Coolant{
 			FlowRate:     8000,
 			TempC:        265,
-			VoidFraction: 0.032,
+			VoidFraction: 0.0,
 			Pressure:     65,
 		},
 		temperature:     Temperature{
@@ -177,6 +192,10 @@ func (r *reactor) SetKEffective(keff float64) {
 
 func (r *reactor) CoreTemperatureC() float64 {
 	return r.temperature.CoreTempC
+}
+
+func (r *reactor) SetCoreTemperatureC(temperature float64) {
+	r.temperature.CoreTempC = temperature
 }
 
 func (r *reactor) Status() ReactorStatus {

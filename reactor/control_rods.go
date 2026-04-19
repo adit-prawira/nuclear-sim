@@ -60,7 +60,7 @@ func (r *reactor) WithdrawnRods(count int) (withdrawn int, isBelowSafe bool) {
 	newInsertedRods := currentInsertedRods - count
 	
 	// Lower bound of total rods could not be below 0
-	newInsertedRods  = int(math.Min(float64(newInsertedRods), float64(0)))
+	newInsertedRods  = int(math.Max(float64(newInsertedRods), float64(0)))
 	r.controlRod.RodsInserted = newInsertedRods
 
 	deltaRods := currentInsertedRods - newInsertedRods

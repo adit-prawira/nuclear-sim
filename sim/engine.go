@@ -19,6 +19,7 @@ type RBMKEngine struct {
 	tickInterval       time.Duration
 	simulationTickSize float64
 	neutronics         physics.NeutronicsEngine
+	thermodynamics     physics.ThermodynamicsEngine
 	stopChan           chan struct{}
 	inputChan 				 chan byte 
 	graphiteSpikeActive bool 
@@ -29,6 +30,7 @@ func NewRBMKEnginer(r reactor.Reactor) Engine {
 		reactor:            r,
 		tickInterval:       100 * time.Millisecond,
 		neutronics:         physics.NewRBMKNeutronicsEngine(),
+		thermodynamics:     physics.NewRBMKThermodynamicsEngine(),
 		simulationTickSize: 1.0,
 		stopChan:           make(chan struct{}),
 		inputChan: 					make(chan byte, 10),
@@ -66,7 +68,7 @@ func (re *RBMKEngine) Run() {
 		}
 		re.tick()
 		re.print()
-	}
+	} 
 }
 
 func (re *RBMKEngine) stop() {
@@ -79,6 +81,7 @@ func (re *RBMKEngine) tick() {
 	
 	baseKeff := 1.000  
 	rodReactivity := re.reactor.RodReactivity()
+	voidReactivity := re.reactor.VoidReactivity()
 	graphiteSpike := 0.0 
 	
 	if re.graphiteSpikeActive {
@@ -86,23 +89,41 @@ func (re *RBMKEngine) tick() {
 		re.graphiteSpikeActive = false
 	}
 
-	re.reactor.SetKEffective(baseKeff + rodReactivity + graphiteSpike)
+	re.reactor.SetKEffective(baseKeff + rodReactivity + voidReactivity + graphiteSpike)
 
 	currentPower := re.reactor.ThermalPower()
 	keff := re.reactor.KEffective()
+	re.reactor.SetThermalPower(re.neutronics.UpdatePower(currentPower, keff, dt))
 
-	re.reactor.UpdateSimulationTimeSeconds(dt)
-	re.reactor.SetThermalPower(re.neutronics.UpdatePower(currentPower, keff, dt))	
+	newCoreTemperature, newCoolantTemperature := re.thermodynamics.UpdateTemperatures(
+		re.reactor.ThermalPower(),
+		re.reactor.CoreTemperatureC(),
+		re.reactor.CoolantTemperatureC(),
+		re.reactor.FlowRate(),
+		dt,
+	)
+	re.reactor.SetCoreTemperatureC(newCoreTemperature)
+	re.reactor.SetCoolantTemperatureC(newCoolantTemperature)
+
+	voidFraction := re.thermodynamics.CalculateVoidFraction( 
+		re.reactor.CoolantTemperatureC(), 
+		re.reactor.CoolantPressure(),
+	)
+	re.reactor.SetVoidFraction(voidFraction)
+
+	re.reactor.UpdateSimulationTimeSeconds(dt)		
 	re.updateStatus()
 }
 
 func (re *RBMKEngine) print() {
 	reactor := re.reactor
-	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Rods: %d/211  Status: %s\r\n", 
+	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Void: %4.1f%%	 Flow: %.0f m^3/h  Rods: %d/211  Status: %s\r\n", 
 		reactor.SimulationTimeSeconds(),
 		reactor.ThermalPower(),
 		reactor.KEffective(),
 		reactor.CoreTemperatureC(),
+		reactor.VoidFractionPercent(),
+		reactor.FlowRate(),
 		reactor.TotalInsertedRods(),
 		reactor.Status().String(),
 	)
@@ -152,6 +173,8 @@ func (re *RBMKEngine) printControls() {
 	fmt.Println("		I - Insert 10 control rods\r")
 	fmt.Println("		o - Withdraw 1 control rod\r")
 	fmt.Println("		O - Withdraw 10 control rods\r")
+	fmt.Println("		f - Increase coolant flow rate\r")
+	fmt.Println("		F - Decrease coolant flow rate\r")
 	fmt.Println("		q - Quit\r\n\r")
 	fmt.Println()
 }
@@ -193,6 +216,12 @@ func (re * RBMKEngine	) processInput() {
 			case 'O': 
 				withdrawn, isBelowSafe := re.reactor.WithdrawnRods(10)
 				re.logControlRodsWithdrawal(withdrawn, isBelowSafe)
+			case 'f': 
+				newFlowRate := re.reactor.UpdateCoolantFlowRate(1000.0)
+				fmt.Printf("\r> Increase coolant flow to %.0f m^3/h\r\n", newFlowRate)
+			case 'F': 
+				newFlowRate := re.reactor.UpdateCoolantFlowRate(-1000.0)
+				fmt.Printf("\r> Decrease coolant flow to %.0f m^3/h\r\n", newFlowRate)
 			case 'q', 'Q': 
         fmt.Println("\r\n> System Shutdown Requested")			  
 				re.reactor.SetIsDestroyed(true)
@@ -218,3 +247,4 @@ func (re *RBMKEngine) logControlRodsWithdrawal(withdrawn int, isBelowSafe bool) 
 		fmt.Printf("\rWARNING: %d control rod(s) inserted - below safe minium of %d control rods\r\n", re.reactor.TotalInsertedRods(), reactor.MinimumSafeRods)
 	}
 }
+
