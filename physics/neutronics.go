@@ -74,9 +74,7 @@ func (rne *rbmkNeutronicsEngine) UpdatePower(currentPower float64, keff float64,
 	if keff >= 1 + beta {
 		alpha := (keff - 1 - beta) / lambda
 		power := currentPower * math.Exp(alpha * dt)
-		if power < 0 {
-			return 0
-		}
+		power = math.Max(power, 0.01)
 		return power 
 	}
 
@@ -85,9 +83,7 @@ func (rne *rbmkNeutronicsEngine) UpdatePower(currentPower float64, keff float64,
 	lambdaEff := beta * math.Ceil(rne.meanDelayedNeutronLifetime(rbmkDelayedNeutronGroups))
 	alpha := (keff - 1.0) / lambdaEff
 	power := currentPower * math.Exp(alpha * dt)
-	if power < 0 {
-		return 0
-	}
+	power = math.Max(power, 0.01)	
 	return power 
 }
 

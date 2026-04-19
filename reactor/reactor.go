@@ -5,7 +5,10 @@ type ReactorStatus int
 const (
 	StatusStable ReactorStatus= iota
 	StatusWarning
-	StatusSCRAM // this is the status that will indicate when AZ-5 must be used for emergency to avoid meltdown 
+
+	// this is the status that will indicate when 
+	// AZ-5 must be used for emergency to avoid meltdown 
+	StatusSCRAM 
 	StatusMeltdown
 )
 
@@ -103,6 +106,14 @@ type Reactor interface {
 	SetCoolantTemperatureC(temperature float64) 
 
 	CoolantPressure() float64
+
+	// Xenon-135 
+	UpdateXenon(dt float64)
+	XenonLevel() float64 
+	SetXenonLevel(level float64)
+	XenonLevelPercent() float64
+	XenonReactivity() float64
+	SetXenonReactivity(reactivity float64)
 }
 
 type reactor struct {
@@ -136,8 +147,8 @@ func NominalRBMK() Reactor {
 			FuelRodTempC: 620,
 		},
 		xenonPoisoning:  XenonPoisoning{
-			XenonLevel:      0.124,
-			XenonReactivity: -180,
+			XenonLevel:      0.0,
+			XenonReactivity: 0.0,
 		},
 		simulationState: SimulationState{
 			SimulationTimeSeconds: 0,
