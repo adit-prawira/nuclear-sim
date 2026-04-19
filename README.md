@@ -222,7 +222,7 @@ nuclear-sim/
 - [x] Slice 4: reactor can reach meltdown and halt
 
 ### Phase 2 — Reactor Components
-- [ ] Slice 5: coolant heats, boils, void fraction rises, k-eff responds
+- [x] Slice 5: coolant heats, boils, void fraction rises, k-eff responds
 - [ ] Slice 6: xenon builds at low power, creates xenon pit, suppresses reactor
 - [ ] Slice 7: fuel temperature Doppler effect partially stabilises reactor
 - [ ] Slice 8: Chernobyl scenario reaches meltdown naturally from physics alone
