@@ -57,10 +57,7 @@ F   — decrease coolant flow rate
 
 ### Slice 6 — Xenon Builds and Poisons the Reactor
 
-**Goal**: Xenon-135 accumulates as a fission byproduct and suppresses the chain
-reaction. At low power it builds faster than it burns — creating a xenon pit
-that makes the reactor very difficult to control. This was a critical factor
-in the Chernobyl accident.
+**Goal**: Xenon-135 accumulates as a fission byproduct and suppresses the chain reaction. At low power it builds faster than it burns — creating a xenon pit that makes the reactor very difficult to control. This was a critical factor in the Chernobyl accident.
 
 **Files touched**:
 - `reactor/xenon.go` — xenon concentration, production rate, decay rate
@@ -206,7 +203,7 @@ nuclear-sim/
 ## Definition of Done — Phase 2
 
 - [x] Slice 5: coolant heats, boils, void fraction rises, k-eff responds
-- [ ] Slice 6: xenon builds at low power, creates xenon pit, suppresses reactor
+- [x] Slice 6: xenon builds at low power, creates xenon pit, suppresses reactor
 - [ ] Slice 7: fuel temperature Doppler effect partially stabilises reactor
 - [ ] Slice 8: Chernobyl scenario reaches meltdown naturally from physics alone
 

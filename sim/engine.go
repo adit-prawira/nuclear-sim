@@ -82,6 +82,7 @@ func (re *RBMKEngine) tick() {
 	baseKeff := 1.000  
 	rodReactivity := re.reactor.RodReactivity()
 	voidReactivity := re.reactor.VoidReactivity()
+	xenonReactivity := re.reactor.XenonReactivity()
 	graphiteSpike := 0.0 
 	
 	if re.graphiteSpikeActive {
@@ -89,11 +90,12 @@ func (re *RBMKEngine) tick() {
 		re.graphiteSpikeActive = false
 	}
 
-	re.reactor.SetKEffective(baseKeff + rodReactivity + voidReactivity + graphiteSpike)
+	re.reactor.SetKEffective(baseKeff + rodReactivity + voidReactivity + xenonReactivity + graphiteSpike)
 
 	currentPower := re.reactor.ThermalPower()
 	keff := re.reactor.KEffective()
 	re.reactor.SetThermalPower(re.neutronics.UpdatePower(currentPower, keff, dt))
+	re.reactor.UpdateXenon(dt)
 
 	newCoreTemperature, newCoolantTemperature := re.thermodynamics.UpdateTemperatures(
 		re.reactor.ThermalPower(),
@@ -117,12 +119,13 @@ func (re *RBMKEngine) tick() {
 
 func (re *RBMKEngine) print() {
 	reactor := re.reactor
-	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Void: %4.1f%%	 Flow: %.0f m^3/h  Rods: %d/211  Status: %s\r\n", 
+	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Void: %4.1f%%	 Xenon: %4.1f%%  Flow: %.0f m^3/h  Rods: %d/211  Status: %s\r\n", 
 		reactor.SimulationTimeSeconds(),
 		reactor.ThermalPower(),
 		reactor.KEffective(),
 		reactor.CoreTemperatureC(),
 		reactor.VoidFractionPercent(),
+		reactor.XenonLevelPercent(),
 		reactor.FlowRate(),
 		reactor.TotalInsertedRods(),
 		reactor.Status().String(),
