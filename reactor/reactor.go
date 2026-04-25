@@ -15,6 +15,11 @@ const (
 const (
 	MeltdownThermalPower = 32000
 	NominalThermalPower = 3200
+	
+	// -0.003 pcm/°C = -0.00000003 Δk/°C (real RBMK value)
+	// Gameplay-tuned to -0.0002 Δk/°C for effective negative feedback
+	DopplerTemperatureCoefficient = -0.0002 
+	NominalFuelTemperatureC = 620.0
 )
 
 func (rs ReactorStatus) String() string {
@@ -71,7 +76,16 @@ type Reactor interface {
 	ThermalPower() float64
 	SetThermalPower(newPower float64)
 
-	IsMeltdown() bool
+	/*
+	Meltdown conditions: 
+		- 🔥 Fuel >1500°C (melting point)
+		- ⚡ Power >32,000 MW (10x nominal)
+		- 🌡️ Core >600°C (structural failure)
+	*/
+	IsFuelTemperatureCMeltdown() bool
+	IsCoreTemperatureCMeltdown() bool 
+	IsThermalPowerMeltdown() bool 
+
 	IsSupercritical() bool
 	PowerPecentOfNominal() float64	
 
@@ -87,6 +101,8 @@ type Reactor interface {
 	SimulationTimeSeconds() float64
 	UpdateSimulationTimeSeconds(dt float64)
 	
+	IsMeltdown() bool
+
 	// Control rods
 	TotalInsertedRods() int 
 	InsertRods(count int) (inserted int, isGraphiteTipSpike bool)
@@ -114,6 +130,11 @@ type Reactor interface {
 	XenonLevelPercent() float64
 	XenonReactivity() float64
 	SetXenonReactivity(reactivity float64)
+
+	// Doopler Feedback loop
+	FuelTemperatureC() float64 
+	SetFuelTemperatureC(temperature float64)
+	DopplerReactivity() float64
 }
 
 type reactor struct {
@@ -225,4 +246,27 @@ func (r *reactor) UpdateSimulationTimeSeconds(dt float64) {
 	r.simulationState.SimulationTimeSeconds += dt
 }
 
+func (r *reactor) FuelTemperatureC() float64 {
+	return r.temperature.FuelRodTempC
+}
 
+func (r *reactor) SetFuelTemperatureC(temperature float64) {
+	r.temperature.FuelRodTempC = temperature
+}
+
+func (r *reactor) DopplerReactivity() float64 {
+	deltaTemperature := r.temperature.FuelRodTempC - NominalFuelTemperatureC
+	return DopplerTemperatureCoefficient * deltaTemperature
+}
+
+func (r *reactor) IsFuelTemperatureCMeltdown() bool {
+	return r.FuelTemperatureC() > 1500.0	
+}
+
+func (r *reactor) IsThermalPowerMeltdown() bool {
+	return r.ThermalPower() > NominalThermalPower * 10
+}
+
+func (r *reactor) IsCoreTemperatureCMeltdown() bool {
+	return r.CoreTemperatureC() > 600.0 
+}

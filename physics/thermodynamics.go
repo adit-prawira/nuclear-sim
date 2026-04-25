@@ -11,13 +11,13 @@ type ThermodynamicsEngine interface {
 		A method to update coolant temperature and core temperature
 		Values will change depending on current thermal power and coolant flow rate
 	*/
-	UpdateTemperatures(powerMW, coreTemperature, coolantTemperature, flowRate float64, dt float64) (newCoreTemperature, newCoolantTemperature float64)
+	UpdateTemperatures(powerMW, coreTemperature, coolantTemperature, fuelTemperature, flowRate float64, dt float64) (newCoreTemperature, newCoolantTemperature, newFuelTemperature float64)
 
 	/*
 		Calculating the void fration of the coolant
 		based of the provided void fraction, temperature and pressue
 	*/
-	CalculateVoidFraction(coolantTemperature, pressue float64) float64
+	CalculateVoidFraction(coolantTemperature, pressue float64) float64	
 }
 
 type rbmkThermodynamicsEngine struct {
@@ -58,16 +58,25 @@ func (rte *rbmkThermodynamicsEngine) CalculateVoidFraction(coolantTemperature fl
 	// Exponential rise in void fraction when coolant temperature is above boiling point
 	voidFraction := reactor.MaxNominalVoidFraction + (temperatureAboveBoilingPoint * 0.01)
 
-	// upper bound void fraction to be at 80%
-	// 80% void fraction means there are no water just steam 
+	// upper bound void fraction to be at 100%
+	// but if reaches around 80% void fraction means there are no water just steam 
 	// heats will increase, causing feedback loop, power keeps increasing 
 	// and the reactor is fucked
-	return math.Min(voidFraction, 0.8)
+	return math.Min(voidFraction, 1.0)
 }
 
 // UpdateTemperatures implements ThermodynamicsEngine.
-func (rte *rbmkThermodynamicsEngine) UpdateTemperatures(powerMW float64, coreTemperature float64, coolantTemperature float64, flowRate float64, dt float64) (newCoreTemperature float64, newCoolantTemperature float64) {	
-	heatIn := powerMW * dt * rte.heatCapacity
+func (rte *rbmkThermodynamicsEngine) UpdateTemperatures(powerMW, coreTemperature, coolantTemperature, fuelTemperature, flowRate float64, dt float64) (newCoreTemperature float64, newCoolantTemperature, newFuelTemperature float64) {	
+	// Power heats fuel directly
+	fuelHeatIn := powerMW * dt * rte.heatCapacity * 5.0 
+	coreHeatIn := powerMW * dt * rte.heatCapacity
+
+	// Heat transfer fuel -> core (proportional to temperature difference)
+	fuelToCoreTransfer := (fuelTemperature - coreTemperature) * 0.0005 * dt 
+
+	newFuelTemp := fuelTemperature + fuelHeatIn - fuelToCoreTransfer
+
+	heatIn := coreHeatIn + fuelToCoreTransfer
 
 	deltaTemperature := coreTemperature - coolantTemperature
 	heatOut := flowRate * rte.coolingEfficiency * deltaTemperature * dt 
@@ -75,15 +84,23 @@ func (rte *rbmkThermodynamicsEngine) UpdateTemperatures(powerMW float64, coreTem
 	netHeat := heatIn - heatOut
 	newCoreTemp := coreTemperature + netHeat 
 	
-	// coolant ambsorbing heat 
-	// Simplified absorbtion mechanics where coolant absrob 30% of heat out 
-	heatAbsorbed := heatOut * 0.3 
-	newCoolantTemp := coolantTemperature + heatAbsorbed
-
+	var newCoolantTemp float64 	
+	if flowRate > 0 {
+		// coolant ambsorbing heat 
+		// Simplified absorbtion mechanics where coolant absrob 30% of heat out 
+		heatAbsorbed := heatOut * 0.3 
+		newCoolantTemp = coolantTemperature + heatAbsorbed
+	} else {
+		// Zero flow: coolant heats toward core temperature 
+		// Stagnant water heats by radiation/conduction
+		heatTransfer := (coreTemperature - coolantTemperature) * 0.01 * dt
+		newCoolantTemp = coolantTemperature + heatTransfer
+	}
+	
 	// upper bound coolant temperature with mininum temperature 
 	// avoiding coolant from being too cold
 	newCoolantTemp = math.Max(newCoolantTemp, reactor.MinimumTemperatureC)
 
-	return newCoreTemp, newCoolantTemp
+	return newCoreTemp, newCoolantTemp, newFuelTemp
 }
 
