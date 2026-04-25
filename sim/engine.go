@@ -83,6 +83,8 @@ func (re *RBMKEngine) tick() {
 	rodReactivity := re.reactor.RodReactivity()
 	voidReactivity := re.reactor.VoidReactivity()
 	xenonReactivity := re.reactor.XenonReactivity()
+	dopplerReactivity := re.reactor.DopplerReactivity()
+	
 	graphiteSpike := 0.0 
 	
 	if re.graphiteSpikeActive {
@@ -90,40 +92,43 @@ func (re *RBMKEngine) tick() {
 		re.graphiteSpikeActive = false
 	}
 
-	re.reactor.SetKEffective(baseKeff + rodReactivity + voidReactivity + xenonReactivity + graphiteSpike)
+	re.reactor.SetKEffective(baseKeff + rodReactivity + voidReactivity + xenonReactivity +  dopplerReactivity + graphiteSpike)
 
 	currentPower := re.reactor.ThermalPower()
 	keff := re.reactor.KEffective()
 	re.reactor.SetThermalPower(re.neutronics.UpdatePower(currentPower, keff, dt))
 	re.reactor.UpdateXenon(dt)
 
-	newCoreTemperature, newCoolantTemperature := re.thermodynamics.UpdateTemperatures(
+	newCoreTemperature, newCoolantTemperature, newFuelTemperature := re.thermodynamics.UpdateTemperatures(
 		re.reactor.ThermalPower(),
 		re.reactor.CoreTemperatureC(),
 		re.reactor.CoolantTemperatureC(),
+		re.reactor.FuelTemperatureC(),
 		re.reactor.FlowRate(),
 		dt,
 	)
 	re.reactor.SetCoreTemperatureC(newCoreTemperature)
 	re.reactor.SetCoolantTemperatureC(newCoolantTemperature)
+	re.reactor.SetFuelTemperatureC(newFuelTemperature)
 
 	voidFraction := re.thermodynamics.CalculateVoidFraction( 
 		re.reactor.CoolantTemperatureC(), 
 		re.reactor.CoolantPressure(),
 	)
 	re.reactor.SetVoidFraction(voidFraction)
-
+	re.checkMeltdown()
 	re.reactor.UpdateSimulationTimeSeconds(dt)		
 	re.updateStatus()
 }
 
 func (re *RBMKEngine) print() {
 	reactor := re.reactor
-	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Void: %4.1f%%	 Xenon: %4.1f%%  Flow: %.0f m^3/h  Rods: %d/211  Status: %s\r\n", 
+	fmt.Printf("\r[t = %4.0fs] Power: %7.1f MW  k-eff: %.3f  Core: %.0f°C  Fuel: %.0f°C  Void: %4.1f%%	 Xenon: %4.1f%%  Flow: %.0f m^3/h  Rods: %d/211  Status: %s\r\n", 
 		reactor.SimulationTimeSeconds(),
 		reactor.ThermalPower(),
 		reactor.KEffective(),
 		reactor.CoreTemperatureC(),
+		reactor.FuelTemperatureC(),
 		reactor.VoidFractionPercent(),
 		reactor.XenonLevelPercent(),
 		reactor.FlowRate(),
@@ -147,14 +152,40 @@ func (re *RBMKEngine) updateStatus() {
 func (re *RBMKEngine) printMeltdown() {
 	fmt.Printf("\r\n")
 	fmt.Printf("\r!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n")
-	fmt.Printf("   REACTOR DESTROYED\r\n")
-	fmt.Printf("   1986-04-26  %s\r\n", re.simTimeAsClockString())
-	fmt.Printf("   PROMPT CRITICALITY EXCEEDED\r\n")
-	fmt.Printf("   Peak power: %.0f MW  (%.0f%% of nominal)\r\n",
+	fmt.Printf("		REACTOR DESTROYED\r\n")
+	fmt.Printf("		1986-04-26  %s\r\n", re.simTimeAsClockString())
+	
+	if re.reactor.IsFuelTemperatureCMeltdown() {
+		fmt.Printf("		FUEL MELTDOWN - %.0f°C\r\n", re.reactor.FuelTemperatureC())
+	} else if re.reactor.IsThermalPowerMeltdown() {
+		fmt.Printf("		PROMPT CRITICALITY EXCEEDED\r\n")
+	} else if re.reactor.IsCoreTemperatureCMeltdown() {
+		fmt.Printf("		CORE OVERHEATING - %.0f°C\r\n", re.reactor.CoreTemperatureC())
+	}
+	
+	fmt.Printf("		Peak power: %.0f MW  (%.0f%% of nominal)\r\n",
 					re.reactor.ThermalPower(),
 					re.reactor.PowerPecentOfNominal(),
 	)
+	fmt.Printf("		Final Fuel Temperature: %.0f°C\r\n", re.reactor.FuelTemperatureC())	
 	fmt.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n")
+}
+
+func (re *RBMKEngine) checkMeltdown() {
+	if re.reactor.IsFuelTemperatureCMeltdown() {
+		re.reactor.SetIsDestroyed(true)
+		return
+	}
+
+	if re.reactor.IsThermalPowerMeltdown() {
+		re.reactor.SetIsDestroyed(true)
+		return
+	}
+
+	if re.reactor.IsCoreTemperatureCMeltdown() {
+		re.reactor.SetIsDestroyed(true)
+		return
+	}
 }
 
 func (re *RBMKEngine) simTimeAsClockString() string {

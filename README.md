@@ -224,7 +224,7 @@ nuclear-sim/
 ### Phase 2 — Reactor Components
 - [x] Slice 5: coolant heats, boils, void fraction rises, k-eff responds
 - [x] Slice 6: xenon builds at low power, creates xenon pit, suppresses reactor
-- [ ] Slice 7: fuel temperature Doppler effect partially stabilises reactor
+- [x] Slice 7: fuel temperature Doppler effect partially stabilises reactor
 - [ ] Slice 8: Chernobyl scenario reaches meltdown naturally from physics alone
 
 ### Phase 3 — Graphics and Particles

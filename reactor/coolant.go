@@ -15,7 +15,8 @@ The physics of the coolant phenomenon sugges that:
 	- Core temperature rises proportionally to power output minues hear carried away by coolant flow
 	- Void fraction increase as coolant temperature approach and exceeds boiling point
 		- Boiling point is at ~285°C
-	- RBMK void coefficient => +0.005 Δk/1% increase in void fraction
+	- RBMK void coefficient => +0.005 Δk/1% increase in void fraction. 
+		Finetuned to +0.002 Δk/1% increase in void fraction for simulation purposes
 	- Cooland behaviour:
 		- Reduced coolant flow -> less heat removed -> higher temperature -> more voids
 		- Coolant is loss if flow rate is 0 and temperature rises are unchecked
@@ -36,8 +37,9 @@ const (
 	MaxFlowRate = 12000.0 
 	MinFlowRate = 0.0 
 
-	// RBMK void coefficient => +0.005 Δk/1% increase in void fraction 
-	VoidCoefficientPerPercent = 0.005
+	// RBMK void coefficient => +0.005 Δk/1% increase in void fraction
+	// Funetuned for simulation purposes to +0.002 Δk/1% increase in void fraction
+	VoidCoefficientPerPercent = 0.002  // was 0.005 (reduce 2.5x)
 
 	MaxNominalVoidFraction = 0.032
 )

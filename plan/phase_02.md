@@ -28,7 +28,9 @@ This feedback loop is the heart of Chernobyl.
 minus heat carried away by coolant flow
 - Void fraction rises as coolant temperature approaches and exceeds boiling point
 (boiling point ~285°C at nominal pressure)
-- RBMK void coefficient: +0.005 delta-k per 1% increase in void fraction
+- RBMK void coefficient: +0.002 Δk per 1% increase in void fraction
+(RBMK's dangerously positive void coefficient - still deadly but controllable
+with aggressive rod insertion)
 - Reduced coolant flow → less heat removed → higher temperature → more voids
 - Loss of coolant: if flow rate reaches 0, temperature rises unchecked
 
@@ -101,8 +103,12 @@ heat, heat affects coolant, coolant affects k-eff, k-eff affects power.
 **Physics introduced**:
 - Doppler broadening: as fuel temperature rises, uranium absorbs more neutrons
 without fission — a negative feedback that partially stabilises the reactor
-- Fuel temperature coefficient for RBMK: approximately -0.003 pcm/°C
-(partially counteracts the positive void coefficient)
+- Fuel temperature coefficient for RBMK: real value is approximately -0.003 pcm/°C,
+but gameplay-tuned to -0.4 pcm/°C (-0.0004 Δk/°C) to provide effective negative
+feedback against the strong positive void coefficient (+0.005 Δk per 1% void which 
+has been reduced to 0.002 Δk per 1% void for simulation purposes). This tuning allows 
+the Doppler effect to meaningfully stabilize the reactor at partial power while still 
+allowing runaway at extreme conditions
 - Heat transfer from fuel to coolant modelled as proportional to temperature
 difference between fuel and coolant
 - Fuel temperature lags behind power changes — a buffer against instant runaway
@@ -204,7 +210,7 @@ nuclear-sim/
 
 - [x] Slice 5: coolant heats, boils, void fraction rises, k-eff responds
 - [x] Slice 6: xenon builds at low power, creates xenon pit, suppresses reactor
-- [ ] Slice 7: fuel temperature Doppler effect partially stabilises reactor
+- [x] Slice 7: fuel temperature Doppler effect partially stabilises reactor
 - [ ] Slice 8: Chernobyl scenario reaches meltdown naturally from physics alone
 
 When all four are complete, the reactor physics are faithful enough to tell the
